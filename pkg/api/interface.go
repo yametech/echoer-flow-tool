@@ -2,7 +2,7 @@ package api
 
 import (
 	"github.com/gin-gonic/gin"
-	"github.com/yametech/echoer-flow-tool/pkg/service"
+	"github.com/yametech/verthandi/pkg/service"
 )
 
 type Extends interface {

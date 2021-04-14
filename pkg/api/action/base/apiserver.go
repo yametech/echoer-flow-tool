@@ -2,8 +2,8 @@ package base
 
 import (
 	"fmt"
-	"github.com/yametech/echoer-flow-tool/pkg/api"
-	baseService "github.com/yametech/echoer-flow-tool/pkg/service/base"
+	"github.com/yametech/verthandi/pkg/api"
+	baseService "github.com/yametech/verthandi/pkg/service/base"
 )
 
 type baseServer struct {
@@ -18,9 +18,10 @@ func NewBaseServer(serviceName string, server *api.Server) *baseServer {
 	}
 	group := base.Group(fmt.Sprintf("/%s", serviceName))
 
-	//pipeline
+	//base
 	{
-		group.GET("/flows", base.ListPipeLine)
+		group.GET("/pipelines", base.ListPipeLine)
+		group.POST("/pipeline", base.CreatePipeLine)
 	}
 
 	return base

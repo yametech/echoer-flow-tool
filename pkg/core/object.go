@@ -2,15 +2,19 @@ package core
 
 import (
 	"encoding/json"
-	"github.com/yametech/echoer-flow-tool/pkg/utils"
+	"github.com/yametech/verthandi/pkg/utils"
 	"time"
 )
+
+type Kind string
 
 type IObject interface {
 	GetUUID() string
 	GetKind() string
+	GetName() string
 	Delete()
 	GenerateVersion() IObject
+	GetResourceVersion() int64
 	Clone() IObject
 }
 
@@ -32,6 +36,10 @@ func (m *Metadata) GetKind() string {
 	return m.Kind
 }
 
+func (m *Metadata) GetName() string {
+	return m.Name
+}
+
 func (m *Metadata) GenerateVersion() IObject {
 	m.Version = time.Now().Unix()
 	if m.UUID == "" {
@@ -41,6 +49,10 @@ func (m *Metadata) GenerateVersion() IObject {
 		m.CreatedTime = time.Now().Unix()
 	}
 	return m
+}
+
+func (m *Metadata) GetResourceVersion() int64 {
+	return m.Version
 }
 
 func (m *Metadata) GetUUID() string {
@@ -77,4 +89,15 @@ func ToMap(i interface{}) (map[string]interface{}, error) {
 		return nil, err
 	}
 	return result, err
+}
+
+func UnmarshalInterfaceToResource(src interface{}, dest IObject) error {
+	bs, err := json.Marshal(src)
+	if err != nil {
+		return err
+	}
+	if err := json.Unmarshal(bs, dest); err != nil {
+		return err
+	}
+	return nil
 }

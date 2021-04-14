@@ -1,35 +1,46 @@
 package base
 
 import (
-	"github.com/yametech/echoer-flow-tool/pkg/core"
+	"github.com/yametech/verthandi/pkg/core"
+	"github.com/yametech/verthandi/pkg/store"
+	"github.com/yametech/verthandi/pkg/store/gtm"
 )
 
-type ArtifactStatus uint8
+type PipelineStatus uint8
 
 const (
-	Created ArtifactStatus = iota
-	Building
-	Built
+	Running PipelineStatus = iota
+	Waiting
+	Finished
 )
 
-type ArtifactSpec struct {
-	ArtifactStatus `json:"artifact_status" bson:"artifact_status"`
-	GitUrl         string `json:"git_url" bson:"git_url"`
-	Language       string `json:"language" bson:"language"`
-	Tag            string `json:"tag" bson:"tag" `
-	Images         string `json:"images" bson:"images"`
-	AppConfig      string `json:"app_config" bson:"app_config"` // gitUrl和Language存在全局配置中，不需要保存在这里
-	AppName        string `json:"app_name" bson:"app_name"`     // 只存英文名，appCode不需要，用name搜索
-	CreateUserId   string `json:"create_user_id" bson:"create_user_id"`
+const PipelineKind core.Kind = "pipeline"
+
+type PipelineSpec struct {
+	Steps          [][]map[string]interface{} `json:"steps" bson:"steps"`
+	PipelineStatus `json:"pipeline_status" bson:"pipeline_status"`
 }
 
-type Artifact struct {
+type Pipeline struct {
 	core.Metadata `json:"metadata"`
-	Spec          ArtifactSpec `json:"spec"`
+	Spec          PipelineSpec `json:"spec"`
 }
 
-func (ar *Artifact) Clone() core.IObject {
-	result := &Artifact{}
-	core.Clone(ar, result)
+// Pipeline impl Coder
+func (*Pipeline) Decode(op *gtm.Op) (core.IObject, error) {
+	action := &Pipeline{}
+	if err := core.ObjectToResource(op.Data, action); err != nil {
+		return nil, err
+	}
+	return action, nil
+}
+
+func (pl *Pipeline) Clone() core.IObject {
+	result := &Pipeline{}
+	core.Clone(pl, result)
 	return result
+}
+
+func init() {
+	store.AddResourceCoder(string(PipelineKind), &Pipeline{})
 }

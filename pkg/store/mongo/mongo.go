@@ -2,9 +2,10 @@ package mongo
 
 import (
 	"context"
-	"github.com/yametech/echoer-flow-tool/pkg/core"
-	"github.com/yametech/echoer-flow-tool/pkg/store"
-	"github.com/yametech/echoer-flow-tool/pkg/store/gtm"
+	"fmt"
+	"github.com/yametech/verthandi/pkg/core"
+	"github.com/yametech/verthandi/pkg/store"
+	"github.com/yametech/verthandi/pkg/store/gtm"
 	"reflect"
 	"time"
 
@@ -257,6 +258,41 @@ func (m *Mongo) Apply(namespace, resource, uuid string, object core.IObject) (co
 	}
 
 	return old, true, nil
+}
+
+func (m *Mongo) Watch2(namespace, resource string, resourceVersion int64, watch store.WatchInterface) {
+	ns := fmt.Sprintf("%s.%s", namespace, resource)
+	versionFilter := func(op *gtm.Op) bool {
+		return versionMatchFilter(op, resourceVersion)
+	}
+	ctx := gtm.Start(m.client,
+		&gtm.Options{
+			DirectReadNs:     []string{ns},
+			ChangeStreamNs:   []string{ns},
+			MaxAwaitTime:     10,
+			DirectReadFilter: versionFilter,
+		})
+
+	go func(watch store.WatchInterface) {
+		for {
+			select {
+			case err := <-ctx.ErrC:
+				watch.ErrorStop() <- err
+				return
+			case <-watch.CloseStop():
+				ctx.Stop()
+				return
+			case op, ok := <-ctx.OpC:
+				if !ok {
+					return
+				}
+				if err := watch.Handle(op); err != nil {
+					watch.ErrorStop() <- err
+					return
+				}
+			}
+		}
+	}(watch)
 }
 
 func (m *Mongo) Delete(namespace, resource, uuid string) error {

@@ -1,4 +1,4 @@
-module github.com/yametech/echoer-flow-tool
+module github.com/yametech/verthandi
 
 go 1.16
 

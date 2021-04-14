@@ -1136,7 +1136,7 @@ func DirectReadSegment(ctx *OpCtx, client *mongo.Client, ns string, o *Options, 
 	if o.Pipe != nil {
 		var pipeline []interface{}
 		if pipeline, err = o.Pipe(ns, false); err != nil {
-			ctx.ErrC <- errors.Wrap(err, "Error building aggregation pipeline stages")
+			ctx.ErrC <- errors.Wrap(err, "Error building aggregation base stages")
 			return
 		}
 		if pipeline != nil && len(pipeline) > 0 {
@@ -1297,7 +1297,7 @@ func ConsumeChangeStream(ctx *OpCtx, client *mongo.Client, ns string, o *Options
 	if o.Pipe != nil {
 		var stages []interface{}
 		if stages, err = o.Pipe(ns, true); err != nil {
-			ctx.ErrC <- errors.Wrap(err, "Error building aggregation pipeline stages")
+			ctx.ErrC <- errors.Wrap(err, "Error building aggregation base stages")
 			return
 		}
 		if stages != nil && len(stages) > 0 {

@@ -1,8 +1,8 @@
 package service
 
 import (
-	"github.com/yametech/echoer-flow-tool/pkg/core"
-	"github.com/yametech/echoer-flow-tool/pkg/store"
+	"github.com/yametech/verthandi/pkg/core"
+	"github.com/yametech/verthandi/pkg/store"
 )
 
 type IService interface {
