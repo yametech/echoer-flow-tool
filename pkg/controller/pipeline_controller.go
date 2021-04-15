@@ -1,50 +1,46 @@
 package controller
 
 import (
+	"encoding/json"
 	"fmt"
+	"github.com/r3labs/sse/v2"
 	"github.com/yametech/verthandi/pkg/common"
 	"github.com/yametech/verthandi/pkg/core"
+	"github.com/yametech/verthandi/pkg/proc"
 	"github.com/yametech/verthandi/pkg/resource/base"
 	"github.com/yametech/verthandi/pkg/store"
+	"time"
 )
 
 var _ Controller = &PipelineController{}
 
 type PipelineController struct {
-	stop chan struct{}
 	store.IStore
-	tqStop chan struct{}
-	tq     *Queue
+	proc *proc.Proc
 }
 
 func NewPipelineController(stage store.IStore) *PipelineController {
 	server := &PipelineController{
-		stop:   make(chan struct{}),
 		IStore: stage,
-		tqStop: make(chan struct{}),
-		tq:     &Queue{},
+		proc:   proc.NewProc(),
 	}
 	return server
 }
 
 func (p *PipelineController) Run() error {
-	return p.recv()
+	p.proc.Add(p.recv)
+	p.proc.Add(p.WatchEchoer)
+	return <-p.proc.Start()
 }
 
-func (p *PipelineController) Stop() error {
-	p.tqStop <- struct{}{}
-	p.stop <- struct{}{}
-	return nil
-}
-
-func (p *PipelineController) recv() error {
+func (p *PipelineController) recv(errC chan<- error) {
 	pipeLineObjs, _, err := p.List(common.DefaultNamespace, common.Pipeline, "", map[string]interface{}{}, 0, 0)
 	if err != nil {
-		return err
+		errC <- err
 	}
 	pipeLineCoder := store.GetResourceCoder(string(base.PipelineKind))
 	if pipeLineCoder == nil {
-		return fmt.Errorf("(%s) %s", base.PipelineKind, "coder not exist")
+		errC <- fmt.Errorf("(%s) %s", base.PipelineKind, "coder not exist")
 	}
 	pipeLineWatchChan := store.NewWatch(pipeLineCoder)
 
@@ -66,12 +62,10 @@ func (p *PipelineController) recv() error {
 
 	for {
 		select {
-		case <-p.stop:
-			pipeLineWatchChan.CloseStop() <- struct{}{}
-			return nil
+
 		case item, ok := <-pipeLineWatchChan.ResultChan():
 			if !ok {
-				return nil
+				errC <- fmt.Errorf("reconcilePipeline recv watch channal close")
 			}
 			if item.GetName() == "" {
 				continue
@@ -88,7 +82,27 @@ func (p *PipelineController) recv() error {
 	}
 }
 
+func (p *PipelineController) WatchEchoer(errC chan<- error) {
+	version := time.Now().Add(-time.Hour * 1).Unix()
+	url := fmt.Sprintf("%s/watch?resource=flowrun?version=%d", common.EchoerAddr, version)
+
+	client := sse.NewClient(url)
+	err := client.SubscribeRaw(func(msg *sse.Event) {
+		data := make(map[string]interface{}, 0)
+		err := json.Unmarshal(msg.Data, &data)
+		if err != nil {
+			fmt.Println(err.Error())
+		}
+		//TODO: watch echoer 拿到data后进行处理
+
+	})
+	if err != nil {
+		errC <- err
+	}
+}
+
 func (p *PipelineController) reconcilePipeline(pipeLineObj *base.Pipeline) error {
+	//TODO: 检测到pipeline后，要发给FSM
 	fmt.Println(*pipeLineObj)
 	return nil
 }

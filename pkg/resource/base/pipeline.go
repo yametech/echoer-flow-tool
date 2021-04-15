@@ -6,6 +6,20 @@ import (
 	"github.com/yametech/verthandi/pkg/store/gtm"
 )
 
+/*
+	pipeline是双重数组
+	整条pipeline由多个Stage组成，每个Stage由多个Step组成
+	Stage是串行，Step是并行
+	pipeline{
+		stage1->stage2->stage3
+	}
+	stage{
+		->step1
+		->step2
+	}
+
+*/
+
 type PipelineStatus uint8
 
 const (
