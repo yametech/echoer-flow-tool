@@ -44,6 +44,7 @@ func (p *PipeLineService) Create(request *apiResource.RequestPipeLine) error {
 				},
 			}
 			step.Spec.StageUUID = stage.UUID
+			step.Spec.PipelineUUID = pipeline.UUID
 			step.GenerateVersion()
 
 			stage.Spec.Steps = append(stage.Spec.Steps, step.UUID)

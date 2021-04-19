@@ -135,17 +135,21 @@ func (p *PipelineController) reconcileStage(stageUUID string) {
 		p.reconcilePipeline(stage.Spec.PipelineUUID)
 		return
 	}
-	filter := map[string]interface{}{"spec.stage_uuid": stageUUID, "spec.step_status": base.Finish}
-	steps, err := p.ListByFilter(common.DefaultNamespace, common.Step, filter, map[string]interface{}{}, 0, 0)
-	if err != nil {
-		fmt.Printf("[Control] reconcileStage get step error %s\n", err)
-		return
-	}
-	if len(steps) != len(stage.Spec.Steps) {
-		return //搜到的完成的step和stage下的step不一致，说明未全部完成，return
-	}
 	stage.Spec.Done = true
-	stage.GenerateVersion()
+	for _, stepStr := range stage.Spec.Steps {
+		step := &base.Step{}
+		err := p.GetByUUID(common.DefaultNamespace, common.Step, stepStr, step)
+		if err != nil {
+			fmt.Printf("[Control] reconcileStage get step error %s\n", err)
+			return
+		}
+		stage.Spec.LastState = fmt.Sprintf("%s-%s", "step", step.UUID)
+		fmt.Println("change")
+		if step.Spec.StepStatus != base.Finish {
+			stage.Spec.Done = false
+			break
+		}
+	}
 	_, _, err = p.Apply(common.DefaultNamespace, common.Stage, stage.UUID, stage)
 	if err != nil {
 		fmt.Printf("[Control] reconcileStage apply stage error %s\n", err)
@@ -163,22 +167,25 @@ func (p *PipelineController) reconcilePipeline(pipeLineUUID string) {
 	if pipeLine.Spec.PipelineStatus == base.Finished {
 		return
 	}
-	filter := map[string]interface{}{"spec.pipeline_uuid": pipeLineUUID, "spec.done": true}
-	stages, err := p.ListByFilter(common.DefaultNamespace, common.Stage, filter, map[string]interface{}{}, 0, 0)
-	if err != nil {
-		fmt.Printf("[Control] reconcilePipeline get stages error %s\n", err)
-		return
-	}
-	if len(stages) != len(pipeLine.Spec.Stages) {
-		return //搜到的完成的stage和pipeline下的stage不一致，说明未全部完成，return
-	}
+
 	pipeLine.Spec.PipelineStatus = base.Finished
-	pipeLine.GenerateVersion()
+	for _, stageStr := range pipeLine.Spec.Stages {
+		stage := &base.Stage{}
+		err := p.GetByUUID(common.DefaultNamespace, common.Stage, stageStr, stage)
+		if err != nil {
+			fmt.Printf("[Control] reconcilePipeline get stage error %s\n", err)
+			return
+		}
+		pipeLine.Spec.LastState = stage.Spec.LastState
+		if stage.Spec.Done != true {
+			pipeLine.Spec.PipelineStatus = base.Running
+			break
+		}
+	}
 	_, _, err = p.Apply(common.DefaultNamespace, common.Pipeline, pipeLine.UUID, pipeLine)
 	if err != nil {
 		fmt.Printf("[Control] reconcilePipeline apply pipeLine error %s\n", err)
 	}
-
 }
 
 func (p *PipelineController) sendEchoer(step *base.Step) {

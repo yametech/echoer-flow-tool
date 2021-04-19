@@ -31,6 +31,7 @@ const PipelineKind core.Kind = "pipeline"
 
 type PipelineSpec struct {
 	Stages         []string `json:"stages" bson:"stages"`
+	LastState      string   `json:"last_state" bson:"last_state"`
 	PipelineStatus `json:"pipeline_status" bson:"pipeline_status"`
 }
 
