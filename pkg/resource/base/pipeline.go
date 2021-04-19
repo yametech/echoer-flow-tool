@@ -24,14 +24,13 @@ type PipelineStatus uint8
 
 const (
 	Running PipelineStatus = iota
-	Waiting
 	Finished
 )
 
 const PipelineKind core.Kind = "pipeline"
 
 type PipelineSpec struct {
-	Steps          [][]map[string]interface{} `json:"steps" bson:"steps"`
+	Stages         []string `json:"stages" bson:"stages"`
 	PipelineStatus `json:"pipeline_status" bson:"pipeline_status"`
 }
 

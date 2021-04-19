@@ -1,5 +1,13 @@
 package base
 
+import (
+	"github.com/yametech/verthandi/pkg/core"
+	"github.com/yametech/verthandi/pkg/store"
+	"github.com/yametech/verthandi/pkg/store/gtm"
+)
+
+const StepKind core.Kind = "step"
+
 type StepType uint8
 
 const (
@@ -7,14 +15,43 @@ const (
 	CD
 )
 
-type Step struct {
-	Type    StepType               `json:"type" bson:"type"`
-	Data    map[string]interface{} `json:"data" bson:"data"`
-	Trigger bool                   `json:"trigger" bson:"trigger"`
-	Done    bool                   `json:"done" bson:"done"`
+type StepStatus uint8
+
+const (
+	Initializing StepStatus = iota
+	Sending
+	Fail
+	Finish
+)
+
+type StepSpec struct {
+	StageUUID  string                 `json:"stage_uuid" bson:"stage_uuid"`
+	Type       StepType               `json:"type" bson:"type"`
+	Data       map[string]interface{} `json:"data" bson:"data"`
+	Trigger    bool                   `json:"trigger" bson:"trigger"`
+	StepStatus `json:"step_status" bson:"step_status"`
 }
 
-type Stage struct {
-	Steps []Step `json:"steps"`
-	Done  bool   `json:"done" bson:"done"`
+type Step struct {
+	core.Metadata `json:"metadata"`
+	Spec          StepSpec `json:"spec"`
+}
+
+// Pipeline impl Coder
+func (*Step) Decode(op *gtm.Op) (core.IObject, error) {
+	step := &Step{}
+	if err := core.ObjectToResource(op.Data, step); err != nil {
+		return nil, err
+	}
+	return step, nil
+}
+
+func (pl *Step) Clone() core.IObject {
+	result := &Step{}
+	core.Clone(pl, result)
+	return result
+}
+
+func init() {
+	store.AddResourceCoder(string(StepKind), &Step{})
 }

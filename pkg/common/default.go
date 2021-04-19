@@ -3,15 +3,22 @@ package common
 import "flag"
 
 const (
-	DefaultNamespace = "verthandi"
-	Pipeline         = "pipeline"
+	DefaultNamespace  = "verthandi"
+	Pipeline          = "pipeline"
+	Stage             = "stage"
+	Step              = "step"
+	DefaultServerName = "pipeline"
 )
 
 var (
-	EchoerAddr = "http://127.0.0.1:8080"
+	EchoerAddr = "http://10.200.65.192:8080"
+	ECHOERCI   = "artifactoryCI"
+	ECHOERCD   = "artifactoryCD"
 )
 
 func init() {
 	flag.StringVar(&EchoerAddr, "echoer", "http://127.0.0.1:8080", "-echoer http://127.0.0.1:8080")
+	flag.StringVar(&ECHOERCI, "ci", "artifactoryCI", "-ci artifactoryCI")
+	flag.StringVar(&ECHOERCD, "cd", "artifactoryCD", "-cd artifactoryCD")
 
 }

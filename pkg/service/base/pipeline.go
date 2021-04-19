@@ -22,12 +22,44 @@ func (p *PipeLineService) Create(request *apiResource.RequestPipeLine) error {
 			Name: request.Name,
 			Kind: string(base.PipelineKind),
 		},
-		Spec: base.PipelineSpec{
-			Steps: request.Step,
-		},
+	}
+	pipeline.GenerateVersion()
+
+	for _, reqStage := range request.Stage {
+		// 多个stage，初始化
+		stage := base.Stage{}
+		stage.Spec.PipelineUUID = pipeline.UUID
+		stage.GenerateVersion()
+
+		for _, reqStep := range reqStage.Steps {
+			// 多个step，初始化
+			step := base.Step{
+				Spec: base.StepSpec{
+					Type:    base.StepType(reqStep.Type),
+					Data:    reqStep.Data,
+					Trigger: reqStep.Trigger,
+				},
+				Metadata: core.Metadata{
+					Kind: string(base.StepKind),
+				},
+			}
+			step.Spec.StageUUID = stage.UUID
+			step.GenerateVersion()
+
+			stage.Spec.Steps = append(stage.Spec.Steps, step.UUID)
+			_, err := p.IService.Create(common.DefaultNamespace, common.Step, &step)
+			if err != nil {
+				return err
+			}
+		}
+		pipeline.Spec.Stages = append(pipeline.Spec.Stages, stage.UUID)
+		_, err := p.IService.Create(common.DefaultNamespace, common.Stage, &stage)
+		if err != nil {
+			return err
+		}
+
 	}
 
-	pipeline.GenerateVersion()
 	_, err := p.IService.Create(common.DefaultNamespace, common.Pipeline, pipeline)
 	return err
 }
