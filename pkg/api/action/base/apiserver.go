@@ -20,6 +20,9 @@ func NewBaseServer(serviceName string, server *api.Server) *baseServer {
 
 	//base
 	{
+		group.GET("/pipelinewatch", base.WatchPipeLine)
+		group.GET("/stepwatch", base.WatchStep)
+
 		group.GET("/pipelines", base.ListPipeLine)
 		group.POST("/pipeline", base.CreatePipeLine)
 	}

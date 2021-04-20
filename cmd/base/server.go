@@ -11,7 +11,7 @@ import (
 var storageUri string
 
 func main() {
-	flag.StringVar(&storageUri, "storage_uri", "mongodb://0.0.0.0:27017/admin", "127.0.0.1:3306")
+	flag.StringVar(&storageUri, "storage_uri", "mongodb://127.0.0.1:27017/admin", "-storage_uri=mongodb://127.0.0.1:27017/admin")
 	flag.Parse()
 
 	//errC := make(chan error)

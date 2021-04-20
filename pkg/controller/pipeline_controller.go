@@ -1,7 +1,6 @@
 package controller
 
 import (
-	"bytes"
 	"encoding/json"
 	"fmt"
 	"github.com/r3labs/sse/v2"
@@ -13,8 +12,6 @@ import (
 	"github.com/yametech/verthandi/pkg/resource/base"
 	"github.com/yametech/verthandi/pkg/store"
 	"github.com/yametech/verthandi/pkg/utils"
-	"io/ioutil"
-	"net/http"
 	"strings"
 	"time"
 )
@@ -41,7 +38,7 @@ func (p *PipelineController) Run() error {
 }
 
 func (p *PipelineController) recv(errC chan<- error) {
-	stepObjs, _, err := p.List(common.DefaultNamespace, common.Step, "", map[string]interface{}{}, 0, 0)
+	stepObjs, err := p.List(common.DefaultNamespace, common.Step, "", map[string]interface{}{}, 0, 0)
 	if err != nil {
 		errC <- err
 	}
@@ -144,7 +141,6 @@ func (p *PipelineController) reconcileStage(stageUUID string) {
 			return
 		}
 		stage.Spec.LastState = fmt.Sprintf("%s-%s", "step", step.UUID)
-		fmt.Println("change")
 		if step.Spec.StepStatus != base.Finish {
 			stage.Spec.Done = false
 			break
@@ -192,36 +188,26 @@ func (p *PipelineController) sendEchoer(step *base.Step) {
 	if step.UUID == "" {
 		step.UUID = utils.NewSUID().String()
 	}
-	var flowRunData string
-	switch step.Spec.Type {
-	case base.CI:
-		flowRun := &flowRunGen.FlowRun{
-			Name: fmt.Sprintf("%s_%d", common.DefaultServerName, time.Now().Unix()),
-		}
-		flowRunStep := map[string]string{
-			"SUCCESS": "done", "FAIL": "done",
-		}
-		flowRunStepName := fmt.Sprintf("%s_%s", "CI", step.UUID)
-		step.Spec.Data["retryCount"] = 15
-		flowRun.AddStep(flowRunStepName, flowRunStep, common.ECHOERCI, step.Spec.Data)
-		flowRunData = flowRun.Generate()
 
-	case base.CD:
-		flowRun := &flowRunGen.FlowRun{
-			Name: fmt.Sprintf("%s-%d", common.DefaultServerName, time.Now().Unix()),
-		}
-		flowRunStep := map[string]string{
-			"SUCCESS": "done", "FAIL": "done",
-		}
-		flowRunStepName := fmt.Sprintf("%s-%s", "CD", step.UUID)
-		flowRun.AddStep(flowRunStepName, flowRunStep, common.ECHOERCD, step.Spec.Data)
-		flowRunData = flowRun.Generate()
+	flowRun := &flowRunGen.FlowRun{
+		EchoerUrl: common.EchoerAddr,
+		Name:      fmt.Sprintf("%s_%d", common.DefaultServerName, time.Now().Unix()),
 	}
-	jsonStr, err := json.Marshal(map[string]interface{}{"data": flowRunData})
-	if err != nil {
-		fmt.Println(err)
+	flowRunStep := map[string]string{
+		"SUCCESS": "done", "FAIL": "done",
 	}
-	echoerPost(jsonStr)
+	stepName := step.Metadata.Name
+	if stepName == "" {
+		stepName = "pipeline"
+	}
+
+	flowRunStepName := fmt.Sprintf("%s_%s", stepName, step.UUID)
+	step.Spec.Data["retryCount"] = 15
+	flowRun.AddStep(flowRunStepName, flowRunStep, step.Spec.ActionName, step.Spec.Data)
+
+	flowRunData := flowRun.Generate()
+	fmt.Println(flowRunData)
+	flowRun.Create(flowRunData)
 }
 
 func (p *PipelineController) handleEchoer(f *baseResource.FSMResp) {
@@ -256,19 +242,19 @@ func (p *PipelineController) handleEchoer(f *baseResource.FSMResp) {
 	}
 }
 
-func echoerPost(flowRunData []byte) {
-	url := fmt.Sprintf("%s/flowrun", common.EchoerAddr)
-	req, _ := http.NewRequest("POST", url, bytes.NewBuffer(flowRunData))
-	req.Header.Set("Content-Type", "application/json")
-	client := &http.Client{}
-	resp, err := client.Do(req)
-	if err != nil {
-		fmt.Println("[Control] echoerPost error", err)
-		return
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode != 200 {
-		body, _ := ioutil.ReadAll(resp.Body)
-		fmt.Printf("[Control] echoerPost status error return msg: %s\n", body)
-	}
-}
+//func echoerPost(flowRunData []byte) {
+//	url := fmt.Sprintf("%s/flowrun", common.EchoerAddr)
+//	req, _ := http.NewRequest("POST", url, bytes.NewBuffer(flowRunData))
+//	req.Header.Set("Content-Type", "application/json")
+//	client := &http.Client{}
+//	resp, err := client.Do(req)
+//	if err != nil {
+//		fmt.Println("[Control] echoerPost error", err)
+//		return
+//	}
+//	defer resp.Body.Close()
+//	if resp.StatusCode != 200 {
+//		body, _ := ioutil.ReadAll(resp.Body)
+//		fmt.Printf("[Control] echoerPost status error return msg: %s\n", body)
+//	}
+//}

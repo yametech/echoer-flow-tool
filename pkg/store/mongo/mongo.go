@@ -92,7 +92,7 @@ func (m *Mongo) Close() error {
 	return m.client.Disconnect(ctx)
 }
 
-func (m *Mongo) List(namespace, resource, labels string, sort map[string]interface{}, skip, limit int64) ([]interface{}, int64, error) {
+func (m *Mongo) List(namespace, resource, labels string, sort map[string]interface{}, skip, limit int64) ([]interface{}, error) {
 	ctx := context.Background()
 	var filter = bson.D{{}}
 	if len(labels) > 0 {
@@ -105,21 +105,18 @@ func (m *Mongo) List(namespace, resource, labels string, sort map[string]interfa
 		Collection(resource).
 		Find(ctx, filter, findOptions)
 	if err != nil {
-		return nil, 0, err
+		return nil, err
 	}
-	count, err := m.client.Database(namespace).Collection(resource).CountDocuments(ctx, filter, options.Count())
-	if err != nil {
-		return nil, 0, err
-	}
+
 	var _results []bson.M
 	if err := cursor.All(ctx, &_results); err != nil {
-		return nil, 0, err
+		return nil, err
 	}
 	results := make([]interface{}, 0)
 	for index := range _results {
 		results = append(results, _results[index])
 	}
-	return results, count, nil
+	return results, nil
 }
 
 func (m *Mongo) ListByFilter(namespace, resource string, filter, sort map[string]interface{}, skip, limit int64) ([]interface{}, error) {

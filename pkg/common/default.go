@@ -12,13 +12,8 @@ const (
 
 var (
 	EchoerAddr = "http://10.200.65.192:8080"
-	ECHOERCI   = "artifactoryCI"
-	ECHOERCD   = "artifactoryCD"
 )
 
 func init() {
-	flag.StringVar(&EchoerAddr, "echoer", "http://127.0.0.1:8080", "-echoer http://127.0.0.1:8080")
-	flag.StringVar(&ECHOERCI, "ci", "artifactoryCI", "-ci artifactoryCI")
-	flag.StringVar(&ECHOERCD, "cd", "artifactoryCD", "-cd artifactoryCD")
-
+	flag.StringVar(&EchoerAddr, "echoer", "http://127.0.0.1:8080", "-echoer=http://10.200.65.192:8080")
 }

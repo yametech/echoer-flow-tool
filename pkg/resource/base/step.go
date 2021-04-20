@@ -8,13 +8,6 @@ import (
 
 const StepKind core.Kind = "step"
 
-type StepType uint8
-
-const (
-	CI StepType = iota
-	CD
-)
-
 type StepStatus uint8
 
 const (
@@ -27,7 +20,7 @@ const (
 type StepSpec struct {
 	StageUUID    string                 `json:"stage_uuid" bson:"stage_uuid"`
 	PipelineUUID string                 `json:"pipeline_uuid" bson:"pipeline_uuid"`
-	Type         StepType               `json:"type" bson:"type"`
+	ActionName   string                 `json:"action_name" bson:"action_name"`
 	Data         map[string]interface{} `json:"data" bson:"data"`
 	Trigger      bool                   `json:"trigger" bson:"trigger"`
 	StepStatus   `json:"step_status" bson:"step_status"`
