@@ -63,13 +63,13 @@ func (p *PipeLineService) Create(request *base2.RequestPipeLine) error {
 					ActionName: reqStep.ActionName,
 					Data:       reqStep.Data,
 					Trigger:    reqStep.Trigger,
+					FrontID:    reqStep.FrontID,
 				},
 				Metadata: core.Metadata{
 					Kind: string(base.StepKind),
 				},
 			}
 			step.Spec.StageUUID = stage.UUID
-			step.Spec.PipelineUUID = pipeline.UUID
 			step.GenerateVersion()
 
 			stage.Spec.Steps = append(stage.Spec.Steps, step.UUID)
@@ -99,11 +99,11 @@ func (p *PipeLineService) ReconcilePipeLine(pipeline *base2.RespPipeline) {
 		}
 		for _, stepUUID := range stage.Spec.Steps {
 			step := base2.RespStep{}
-
 			err := p.GetByUUID(common.DefaultNamespace, common.Step, stepUUID, &step)
 			if err != nil {
 				continue
 			}
+			step.Spec.PipelineUUID = pipeline.UUID
 			stage.Spec.StepsData = append(stage.Spec.StepsData, step)
 		}
 		pipeline.Spec.StagesData = append(pipeline.Spec.StagesData, stage)

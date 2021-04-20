@@ -18,6 +18,7 @@ type RequestStage struct {
 type RequestStep struct {
 	ActionName string                 `json:"action_name" bson:"action_name"`
 	Data       map[string]interface{} `json:"data" bson:"data"`
+	FrontID    string                 `json:"front_id" bson:"front_id"`
 	Trigger    bool                   `json:"trigger" bson:"trigger"`
 }
 

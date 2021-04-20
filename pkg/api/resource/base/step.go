@@ -20,6 +20,7 @@ const (
 type RespStepSpec struct {
 	StageUUID      string                 `json:"stage_uuid" bson:"stage_uuid"`
 	PipelineUUID   string                 `json:"pipeline_uuid" bson:"pipeline_uuid"`
+	FrontID        string                 `json:"front_id" bson:"front_id"`
 	ActionName     string                 `json:"action_name" bson:"action_name"`
 	Data           map[string]interface{} `json:"data" bson:"data"`
 	Trigger        bool                   `json:"trigger" bson:"trigger"`
