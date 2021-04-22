@@ -85,7 +85,6 @@ func (p *PipeLineService) Create(request *base2.RequestPipeLine) error {
 		}
 
 	}
-
 	_, err := p.IService.Create(common.DefaultNamespace, common.Pipeline, pipeline)
 	return err
 }

@@ -13,7 +13,7 @@ type IService interface {
 	GetByUUID(namespace, resource, uuid string, result interface{}) error
 	GetByFilter(namespace, resource string, result interface{}, filter map[string]interface{}) error
 	Create(namespace, resource string, object core.IObject) (core.IObject, error)
-	Apply(namespace, resource, uuid string, object core.IObject) (core.IObject, bool, error)
+	Apply(namespace, resource, uuid string, object core.IObject, forceApply bool) (core.IObject, bool, error)
 	Delete(namespace, resource, uuid string) error
 	Watch(namespace, resource, kind, version string, objectChan chan core.IObject, closed chan struct{})
 	Watch2(namespace, resource string, resourceVersion int64, watch store.WatchInterface)

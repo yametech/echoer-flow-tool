@@ -32,56 +32,56 @@ func NewPipelineController(store store.IStore) *PipelineController {
 }
 
 func (p *PipelineController) Run() error {
-	p.proc.Add(p.recv)
-	p.proc.Add(p.WatchEchoer)
+	p.proc.Add(p.recvPipeLine)
+	p.proc.Add(p.watchEchoer)
 	return <-p.proc.Start()
 }
 
-func (p *PipelineController) recv(errC chan<- error) {
-	stepObjs, err := p.List(common.DefaultNamespace, common.Step, "", map[string]interface{}{}, 0, 0)
+func (p *PipelineController) recvPipeLine(errC chan<- error) {
+	pipeLineObjs, err := p.List(common.DefaultNamespace, common.Pipeline, "", map[string]interface{}{}, 0, 0)
 	if err != nil {
 		errC <- err
 	}
-	stepCoder := store.GetResourceCoder(string(base.StepKind))
-	if stepCoder == nil {
+	pipeLineCoder := store.GetResourceCoder(string(base.PipelineKind))
+	if pipeLineCoder == nil {
 		errC <- fmt.Errorf("(%s) %s", base.PipelineKind, "coder not exist")
 	}
-	stepWatchChan := store.NewWatch(stepCoder)
+	pipeLineWatchChan := store.NewWatch(pipeLineCoder)
 
 	var version int64
-	for _, item := range stepObjs {
-		stepObj := &base.Step{}
-		if err := core.UnmarshalInterfaceToResource(&item, stepObj); err != nil {
+	for _, item := range pipeLineObjs {
+		pipeLineObj := &base.Pipeline{}
+		if err := core.UnmarshalInterfaceToResource(&item, pipeLineObj); err != nil {
 			fmt.Printf("unmarshal step error %s\n", err)
 		}
-		if stepObj.GetResourceVersion() > version {
-			version = stepObj.GetResourceVersion()
+		if pipeLineObj.GetResourceVersion() > version {
+			version = pipeLineObj.GetResourceVersion()
 		}
-		go p.handleStep(stepObj)
+		go p.handlePipeline(pipeLineObj)
 	}
 
-	p.Watch2(common.DefaultNamespace, common.Step, version, stepWatchChan)
-	fmt.Println("pipelineController start watching step")
+	p.Watch2(common.DefaultNamespace, common.Pipeline, version, pipeLineWatchChan)
+	fmt.Println("pipelineController start watching pipeline")
 	for {
 		select {
-		case item, ok := <-stepWatchChan.ResultChan():
+		case item, ok := <-pipeLineWatchChan.ResultChan():
 			if !ok {
-				errC <- fmt.Errorf("handleStep recv watch channal close")
+				errC <- fmt.Errorf("recvPipeLine watch channal close")
 			}
 			if item.GetUUID() == "" {
 				continue
 			}
-			stepObj := &base.Step{}
-			if err := core.UnmarshalInterfaceToResource(&item, stepObj); err != nil {
-				fmt.Printf("receive step UnmarshalInterfaceToResource error %s\n", err)
+			pipeLineObj := &base.Pipeline{}
+			if err := core.UnmarshalInterfaceToResource(&item, pipeLineObj); err != nil {
+				fmt.Printf("receive pipeline UnmarshalInterfaceToResource error %s\n", err)
 				continue
 			}
-			go p.handleStep(stepObj)
+			go p.handlePipeline(pipeLineObj)
 		}
 	}
 }
 
-func (p *PipelineController) WatchEchoer(errC chan<- error) {
+func (p *PipelineController) watchEchoer(errC chan<- error) {
 	version := time.Now().Add(-time.Hour * 1).Unix()
 	url := fmt.Sprintf("%s/watch?resource=flowrun?version=%d", common.EchoerAddr, version)
 
@@ -93,7 +93,7 @@ func (p *PipelineController) WatchEchoer(errC chan<- error) {
 		if err != nil {
 			fmt.Println(err.Error())
 		}
-		go p.handleEchoer(&data)
+		p.handleFlowRun(&data)
 
 	})
 	if err != nil {
@@ -101,86 +101,35 @@ func (p *PipelineController) WatchEchoer(errC chan<- error) {
 	}
 }
 
-func (p *PipelineController) handleStep(step *base.Step) {
-	switch step.Spec.StepStatus {
-	case base.Initializing:
-		if !step.Spec.Trigger {
-			return
-		}
-		fmt.Printf("[Control] handleStep send %s to Echoer\n", step.UUID)
-		p.sendEchoer(step)
-		step.Spec.StepStatus = base.Sending
-		_, _, err := p.Apply(common.DefaultNamespace, common.Step, step.UUID, step)
-		if err != nil {
-			fmt.Printf("[Control] handleStep apply step error %s\n", err)
-		}
-	case base.Finish:
-		fmt.Printf("[Control] step %s finish start reconcileStage %s\n", step.UUID, step.Spec.StageUUID)
-		go p.reconcileStage(step.Spec.StageUUID)
-	}
-}
-
-func (p *PipelineController) reconcileStage(stageUUID string) {
-	stage := &base.Stage{}
-	err := p.GetByUUID(common.DefaultNamespace, common.Stage, stageUUID, stage)
-	if err != nil {
-		fmt.Printf("[Control] reconcileStage get stage %s error %s\n", stageUUID, err)
-		return
-	}
-	// 如果stage已经完成，直接检查pipeline
-	if stage.Spec.Done {
-		p.reconcilePipeline(stage.Spec.PipelineUUID)
-		return
-	}
-	stage.Spec.Done = true
-	for _, stepStr := range stage.Spec.Steps {
-		step := &base.Step{}
-		err := p.GetByUUID(common.DefaultNamespace, common.Step, stepStr, step)
-		if err != nil {
-			fmt.Printf("[Control] reconcileStage get step error %s\n", err)
-			return
-		}
-		stage.Spec.LastState = fmt.Sprintf("%s-%s", "step", step.UUID)
-		if step.Spec.StepStatus != base.Finish {
-			stage.Spec.Done = false
-			break
-		}
-	}
-	_, _, err = p.Apply(common.DefaultNamespace, common.Stage, stage.UUID, stage)
-	if err != nil {
-		fmt.Printf("[Control] reconcileStage apply stage error %s\n", err)
-	}
-	p.reconcilePipeline(stage.Spec.PipelineUUID)
-}
-
-func (p *PipelineController) reconcilePipeline(pipeLineUUID string) {
-	pipeLine := &base.Pipeline{}
-	err := p.GetByUUID(common.DefaultNamespace, common.Pipeline, pipeLineUUID, pipeLine)
-	if err != nil {
-		fmt.Printf("[Control] reconcilePipeline get pipeLine error %s\n", err)
-		return
-	}
-	if pipeLine.Spec.PipelineStatus == base.Finished {
-		return
-	}
-
-	pipeLine.Spec.PipelineStatus = base.Finished
-	for _, stageStr := range pipeLine.Spec.Stages {
+func (p *PipelineController) handlePipeline(pipeLine *base.Pipeline) {
+	for _, stageUUID := range pipeLine.Spec.Stages {
 		stage := &base.Stage{}
-		err := p.GetByUUID(common.DefaultNamespace, common.Stage, stageStr, stage)
+		err := p.GetByUUID(common.DefaultNamespace, common.Stage, stageUUID, stage)
 		if err != nil {
-			fmt.Printf("[Control] reconcilePipeline get stage error %s\n", err)
+			fmt.Printf("[Control] handlePipeline get stage error %s\n", err)
 			return
 		}
-		pipeLine.Spec.LastState = stage.Spec.LastState
-		if stage.Spec.Done != true {
-			pipeLine.Spec.PipelineStatus = base.Running
-			break
+		if stage.Spec.Done == true {
+			continue
 		}
-	}
-	_, _, err = p.Apply(common.DefaultNamespace, common.Pipeline, pipeLine.UUID, pipeLine)
-	if err != nil {
-		fmt.Printf("[Control] reconcilePipeline apply pipeLine error %s\n", err)
+		for _, stepUUID := range stage.Spec.Steps {
+			step := &base.Step{}
+			err := p.GetByUUID(common.DefaultNamespace, common.Step, stepUUID, step)
+			if err != nil {
+				fmt.Printf("[Control] handlePipeline get step error %s\n", err)
+				return
+			}
+			if step.Spec.StepStatus == base.Initializing && step.Spec.Trigger == true {
+				fmt.Printf("[Control] handlePipeline send: %s step: %s to Echoer\n", step.UUID, step.Spec.ActionName)
+				go p.sendEchoer(step)
+				step.Spec.StepStatus = base.Sending
+				_, _, err := p.Apply(common.DefaultNamespace, common.Step, step.UUID, step, false)
+				if err != nil {
+					fmt.Printf("[Control] handlePipeline apply step error %s\n", err)
+				}
+			}
+		}
+		break
 	}
 }
 
@@ -191,7 +140,7 @@ func (p *PipelineController) sendEchoer(step *base.Step) {
 
 	flowRun := &flowRunGen.FlowRun{
 		EchoerUrl: common.EchoerAddr,
-		Name:      fmt.Sprintf("%s_%d", common.DefaultServerName, time.Now().Unix()),
+		Name:      fmt.Sprintf("%s_%d", common.DefaultServerName, time.Now().UnixNano()),
 	}
 	flowRunStep := map[string]string{
 		"SUCCESS": "done", "FAIL": "done",
@@ -202,7 +151,6 @@ func (p *PipelineController) sendEchoer(step *base.Step) {
 	}
 
 	flowRunStepName := fmt.Sprintf("%s_%s", stepName, step.UUID)
-	step.Spec.Data["retryCount"] = 15
 	flowRun.AddStep(flowRunStepName, flowRunStep, step.Spec.ActionName, step.Spec.Data)
 
 	flowRunData := flowRun.Generate()
@@ -210,7 +158,7 @@ func (p *PipelineController) sendEchoer(step *base.Step) {
 	flowRun.Create(flowRunData)
 }
 
-func (p *PipelineController) handleEchoer(f *baseResource.FSMResp) {
+func (p *PipelineController) handleFlowRun(f *baseResource.FSMResp) {
 	flowName := strings.Split(f.Metadata.Name, "_")
 	if len(flowName) != 2 || flowName[0] != common.DefaultServerName {
 		return
@@ -232,29 +180,91 @@ func (p *PipelineController) handleEchoer(f *baseResource.FSMResp) {
 		}
 		if flowStep.Spec.Response.State == "SUCCESS" {
 			step.Spec.StepStatus = base.Finish
+			fmt.Printf("[Echoer] change step: %s action: %s to success\n", step.UUID, step.Spec.ActionName)
 		} else {
 			step.Spec.StepStatus = base.Fail
+			fmt.Printf("[Echoer] change step: %s action: %s to fail\n", step.UUID, step.Spec.ActionName)
 		}
-		_, _, err = p.Apply(common.DefaultNamespace, common.Step, step.UUID, step)
+		_, _, err = p.Apply(common.DefaultNamespace, common.Step, step.UUID, step, false)
 		if err != nil {
 			fmt.Println("[Echoer] apply step error:", err)
 		}
+		p.reconcileStep(step)
 	}
 }
 
-//func echoerPost(flowRunData []byte) {
-//	url := fmt.Sprintf("%s/flowrun", common.EchoerAddr)
-//	req, _ := http.NewRequest("POST", url, bytes.NewBuffer(flowRunData))
-//	req.Header.Set("Content-Type", "application/json")
-//	client := &http.Client{}
-//	resp, err := client.Do(req)
-//	if err != nil {
-//		fmt.Println("[Control] echoerPost error", err)
-//		return
-//	}
-//	defer resp.Body.Close()
-//	if resp.StatusCode != 200 {
-//		body, _ := ioutil.ReadAll(resp.Body)
-//		fmt.Printf("[Control] echoerPost status error return msg: %s\n", body)
-//	}
-//}
+func (p *PipelineController) reconcileStep(stepObj *base.Step) {
+	if stepObj.Spec.StepStatus != base.Finish {
+		return
+	}
+	stage := &base.Stage{}
+	err := p.GetByUUID(common.DefaultNamespace, common.Stage, stepObj.Spec.StageUUID, stage)
+	if err != nil {
+		fmt.Printf("[Echoer] reconcileStep get stage error %s\n", err)
+		return
+	}
+	if stage.Spec.Done == true {
+		p.reconcileStage(stage)
+		return
+	}
+	stage.Spec.Done = true
+	for _, stepUUID := range stage.Spec.Steps {
+		if stepObj.UUID == stepUUID {
+			continue
+		}
+		step := &base.Step{}
+		err := p.GetByUUID(common.DefaultNamespace, common.Step, stepUUID, step)
+		if err != nil {
+			fmt.Printf("[Control] handlePipeline get step error %s\n", err)
+			return
+		}
+		if step.Spec.StepStatus != base.Finish {
+			stage.Spec.Done = false
+			break
+		}
+	}
+	_, _, err = p.Apply(common.DefaultNamespace, common.Stage, stage.UUID, stage, false)
+	if err != nil {
+		fmt.Printf("[Control] handlePipeline apply stage error %s\n", err)
+		return
+	}
+	if stage.Spec.Done == true {
+		p.reconcileStage(stage)
+	}
+}
+
+func (p *PipelineController) reconcileStage(stageObj *base.Stage) {
+	if stageObj.Spec.Done != true {
+		return
+	}
+	pipeLine := &base.Pipeline{}
+	err := p.GetByUUID(common.DefaultNamespace, common.Pipeline, stageObj.Spec.PipelineUUID, pipeLine)
+	if err != nil {
+		fmt.Printf("[Echoer] reconcileStage get pipeline error %s\n", err)
+		return
+	}
+	if pipeLine.Spec.PipelineStatus == base.Finished {
+		return
+	}
+	pipeLine.Spec.PipelineStatus = base.Finished
+	for _, stageUUID := range pipeLine.Spec.Stages {
+		if stageObj.UUID == stageUUID {
+			continue
+		}
+		stage := &base.Stage{}
+		err := p.GetByUUID(common.DefaultNamespace, common.Stage, stageUUID, stage)
+		if err != nil {
+			fmt.Printf("[Echoer] reconcileStage get Stage error %s\n", err)
+			return
+		}
+		if stage.Spec.Done != true {
+			pipeLine.Spec.PipelineStatus = base.Running
+			break
+		}
+	}
+	_, _, err = p.Apply(common.DefaultNamespace, common.Pipeline, pipeLine.UUID, pipeLine, true)
+	if err != nil {
+		fmt.Printf("[Control] reconcileStage apply pipeline error %s\n", err)
+		return
+	}
+}
